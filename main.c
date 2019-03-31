@@ -60,6 +60,14 @@ bool wait_for_vsync();
 bool gameOn = false;
 bool gameOver = false;
 
+void wait_for_response(){
+    while(1){
+        if(KEY_EDGE_ptr!=0){
+            return;
+        }
+    }
+}
+
 int main() {
 
     /* set front pixel buffer to start of FPGA On-chip memory */
@@ -74,44 +82,78 @@ int main() {
     *(pixel_ctrl_ptr + 1) = 0xC0000000;
 
     unsigned SW_value;
-    unsigned score;
-    unsigned score_hundred = 0;
-    unsigned score_ten = 0;
-    unsigned score_one = 0;
-    unsigned oneSecCount;
+//    unsigned score;
+//    unsigned score_hundred = 0;
+//    unsigned score_ten = 0;
+//    unsigned score_one = 0;
+//    unsigned oneSecCount;
 
-    while(1){
-            int i = rand()%14;
-            char * textOutput = instruction[i].instruction;
-//            if(key_ctr_ptr == instruction[i].answer){
-////                //show the correct image
-////            }else{
-////                //show the wrong image
-////            }
-////        }
-            int key_pressed = -1;
-            if(KEY_EDGE_ptr == 0x0001) {
-                key_pressed = 0;
-            }else if (KEY_EDGE_ptr == 0x0010){
-                key_pressed = 1;
-            }else if (KEY_EDGE_ptr == 0x0100){
-                key_pressed = 2;
-            }else{
-                key_pressed = 3;
-            }
-            
-            //compare result with the key_pressed
-            if(key_pressed == instruction[i].answer){
-                //show correct response
-            }else{
-                //show wrong response
-            }
+    start:
+    {
+        unsigned SW_value = (unsigned int) *SW_ptr;// read SW
+        //load start page
+        if(SW_value ==1){
+            goto new_game;
+        }else{
+            goto start;
+        }
     }
 
+    new_game:
+    {
+        int count=0;
+        bool moveOn = true;
+        //load game page without instruction title here
 
+        while (moveOn) {
+            int i = rand() % 14;
+            char *textOutput = instruction[i].instruction;
+            //giving time to wait for the user response
+            wait_for_response();
 
+            //if edge capture
+            int key_pressed = -1;
+            if (KEY_EDGE_ptr == 0x0001) {
+                key_pressed = 0;
+            } else if (KEY_EDGE_ptr == 0x0010) {
+                key_pressed = 1;
+            } else if (KEY_EDGE_ptr == 0x0100) {
+                key_pressed = 2;
+            } else {
+                key_pressed = 3;
+            }
+            //clear capture
 
+            //compare result with the key_pressed
+            if (key_pressed == instruction[i].answer) {
+                //show correct response
+                count++;
 
+            } else {
+                //show wrong response
+                goto game_over;
+            }
+            //clear edge_capture
+            int KEY_release = *KEY_EDGE_ptr;
+            *KEY_EDGE_ptr = 0xF;
+
+            unsigned SW_value = (unsigned int) *SW_ptr;// read SW
+            if (SW_value == 0){
+                goto start;
+            }
+
+        }
+    }
+    game_over:
+    {
+        //show game over image
+        //display count on VGA
+        if(SW_value == 0){
+            goto start;
+        }else{
+            goto game_over;
+        }
+    }
 }
 
 // subroutine for plotting text on the screen
