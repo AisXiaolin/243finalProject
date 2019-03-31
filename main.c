@@ -2,15 +2,15 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include "struct.h"
+#include "image.h"
 #include <string.h>
-#include <math.h>
 
 //function for image input
 //load initial image for instructions
 
 
 //initialize instructions
-INST instruction[13] = {
+;INST instruction[13] = {
         {.instruction = "Not Left", .answer = 1},
         {.instruction = "Not Right", .answer = 0},
         {.instruction = "Not Not up", .answer = 2},
@@ -91,7 +91,7 @@ int main() {
     start:
     {
         unsigned SW_value = (unsigned int) *SW_ptr;// read SW
-        //load start page
+        plot_image(0,0, start_page_320x240, 320, 240);
         if(SW_value ==1){
             goto new_game;
         }else{
@@ -104,6 +104,7 @@ int main() {
         int count=0;
         bool moveOn = true;
         //load game page without instruction title here
+        plot_image(0,0, game_page_320x240, 320, 240);
 
         while (moveOn) {
             int i = rand() % 14;
@@ -147,6 +148,8 @@ int main() {
     game_over:
     {
         //show game over image
+        plot_image(0,0, gameover_page_320x240, 320, 240);
+
         //display count on VGA
         if(SW_value == 0){
             goto start;
