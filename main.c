@@ -10,7 +10,7 @@
 
 
 //initialize instructions
-;INST instruction[13] = {
+;INST instruction[12] = {
         {.instruction = "Not Left", .answer = 1},
         {.instruction = "Not Right", .answer = 0},
         {.instruction = "Not Not up", .answer = 2},
@@ -23,8 +23,6 @@
         {.instruction = "Not Not Not Right", .answer = 0},
         {.instruction = "Not Not Not Up", .answer = 3},
         {.instruction = "Not Not Not Down", .answer = 2},
-        {.instruction = "Not Not Not Down", .answer = 2},
-        {.instruction = "Not Not Not Down", .answer = 2}
 };
 
 //interval timer to count the reaction time down
@@ -59,11 +57,22 @@ bool wait_for_vsync();
 // global varible for determining the game state
 bool gameOn = false;
 bool gameOver = false;
-
+void VGA_text_clean() {
+    /* assume that the text string fits on one line */
+    for(int y=0;y<60;y++){
+        for(int x=0;x<80;x++){
+            int offset = (y << 7) + x;
+            *(character_buffer + offset) = 0;
+            ++offset;
+        }
+    }
+}
 void wait_for_response(){
     while(1){
-        if(KEY_EDGE_ptr!=0){
+        if(*KEY_EDGE_ptr!=0){
             return;
+        } else {
+            //do nothing
         }
     }
 }
@@ -82,48 +91,55 @@ int main() {
     *(pixel_ctrl_ptr + 1) = 0xC0000000;
 
     unsigned SW_value;
-//    unsigned score;
-//    unsigned score_hundred = 0;
-//    unsigned score_ten = 0;
-//    unsigned score_one = 0;
-//    unsigned oneSecCount;
+    int count = 0;
 
     start:
     {
+        VGA_text_clean();
+        count = 0;
         unsigned SW_value = (unsigned int) *SW_ptr;// read SW
         plot_image(0,0, start_page_320x240, 320, 240);
         if(SW_value ==1){
             goto new_game;
         }else{
+            wait_for_vsync(); // swap front and back buffers on VGA vertical sync
+            pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer
             goto start;
         }
     }
 
     new_game:
     {
-        int count=0;
         bool moveOn = true;
+        gameOver = false;
         //load game page without instruction title here
         plot_image(0,0, game_page_320x240, 320, 240);
+        wait_for_vsync(); // swap front and back buffers on VGA vertical sync
+        pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer
 
         while (moveOn) {
-            int i = rand() % 14;
-            char *textOutput = instruction[i].instruction;
+            int i = rand() % 13;
+            //char *textOutput = ;
+            //vga text goes here:
+            VGA_text_clean();
+            VGA_text(32,10,instruction[i].instruction);
+
             //giving time to wait for the user response
             wait_for_response();
 
             //if edge capture
             int key_pressed = -1;
-            if (KEY_EDGE_ptr == 0x0001) {
+            if (*KEY_EDGE_ptr == 0b0001) {
                 key_pressed = 0;
-            } else if (KEY_EDGE_ptr == 0x0010) {
+            } else if (*KEY_EDGE_ptr == 0b0010) {
                 key_pressed = 1;
-            } else if (KEY_EDGE_ptr == 0x0100) {
+            } else if (*KEY_EDGE_ptr == 0b0100) {
                 key_pressed = 2;
             } else {
                 key_pressed = 3;
             }
             //clear capture
+            *KEY_EDGE_ptr = 0xF;
 
             //compare result with the key_pressed
             if (key_pressed == instruction[i].answer) {
@@ -132,6 +148,7 @@ int main() {
 
             } else {
                 //show wrong response
+                gameOver = true;
                 goto game_over;
             }
             //clear edge_capture
@@ -145,17 +162,45 @@ int main() {
 
         }
     }
+
     game_over:
-    {
+   if(gameOver) {
         //show game over image
-        plot_image(0,0, gameover_page_320x240, 320, 240);
+       VGA_text_clean();
+       gameOverloop:
+        plot_image(0,0, game_over_320x240, 320, 240);
+
+       char score_hundred = count / 100;
+       char score_ten = (count - score_hundred * 100) / 10;
+       char score_one = count - score_hundred * 100 - score_ten * 10;
+       char myScoreString[40];
+       if (score_hundred != 0) {
+           myScoreString[0] = score_hundred + '0';
+       } else {
+           myScoreString[0] = ' ';
+       }
+       if (score_hundred == 0 && score_ten == 0) {
+           myScoreString[1] = ' ';
+       } else {
+           myScoreString[1] = score_ten + '0';
+       }
+       myScoreString[2] = score_one + '0';
+       myScoreString[3] = '\0';
+
+        VGA_text(42,29,myScoreString);
+
+        int SW_value = *SW_ptr;
 
         //display count on VGA
         if(SW_value == 0){
             goto start;
-        }else{
-            goto game_over;
+        } else{
+            wait_for_vsync(); // swap front and back buffers on VGA vertical sync
+            pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer
+            goto gameOverloop;
         }
+
+
     }
 }
 
@@ -172,6 +217,8 @@ void VGA_text(int x, int y, char *text_ptr) {
         ++offset;
     }
 }
+
+
 
 
 // function for swapping two intergers
