@@ -5,27 +5,30 @@
 #include "image.h"
 #include <string.h>
 
-//function for image input
-//load initial image for instructions
 
-
-//initialize instructions
-;INST instruction[12] = {
+//initialize instructions and the corresponding answers
+;INST instruction[19] = {
+        {.instruction = "Not Not Not Not Not Up", .answer = 3},
         {.instruction = "Not Left", .answer = 1},
-        {.instruction = "Not Right", .answer = 0},
-        {.instruction = "Not Not up", .answer = 2},
+        {.instruction = "Not Not Not Not Left", .answer = 0},
+        {.instruction = "Not Not Not Not Not Not Up", .answer = 2},
+        {.instruction = "Not Not Not Left", .answer = 1},
+        {.instruction = "Not Not Up", .answer = 2},
         {.instruction = "Not Down", .answer = 2},
+        {.instruction = "Not Not Not Down", .answer = 2},
+        {.instruction = "Not Not Not Not Not Down", .answer = 2},
+        {.instruction = "Not Not Not Right", .answer = 0},
         {.instruction = "Not Not Down", .answer = 3},
         {.instruction = "Not Up", .answer = 3},
         {.instruction = "Not Not Left", .answer = 0},
+        {.instruction = "Not Right", .answer = 0},
+        {.instruction = "Not Not Not Not Not Right", .answer = 0},
         {.instruction = "Not Not Right", .answer = 1},
-        {.instruction = "Not Not Not Left", .answer = 1},
-        {.instruction = "Not Not Not Right", .answer = 0},
         {.instruction = "Not Not Not Up", .answer = 3},
-        {.instruction = "Not Not Not Down", .answer = 2},
+        {.instruction = "Not Not Not Not Down", .answer = 3},
+        {.instruction = "Not Not Not Not Not Not Left", .answer = 0}
 };
 
-//interval timer to count the reaction time down
 
 // global variables for I/O devices addresses
 volatile int *LEDR_ptr = (int *) 0xFF200000;
@@ -54,9 +57,13 @@ void clear_screen();
 // and return to the caller when the plotting is finished
 bool wait_for_vsync();
 
-// global varible for determining the game state
-bool gameOn = false;
+//subroutine for waitting for user's response
+void wait_for_response();
+
+// global variable for determining the game state
 bool gameOver = false;
+
+//function to clear the text
 void VGA_text_clean() {
     /* assume that the text string fits on one line */
     for(int y=0;y<60;y++){
@@ -67,15 +74,7 @@ void VGA_text_clean() {
         }
     }
 }
-void wait_for_response(){
-    while(1){
-        if(*KEY_EDGE_ptr!=0){
-            return;
-        } else {
-            //do nothing
-        }
-    }
-}
+
 
 int main() {
 
@@ -90,118 +89,122 @@ int main() {
     /* set back pixel buffer to start of SDRAM memory */
     *(pixel_ctrl_ptr + 1) = 0xC0000000;
 
-    unsigned SW_value;
-    int count = 0;
+    int count = 0; //count for the score
 
+
+    /* Start subroutine
+     * Draw the start page, clear all data*/
     start:
     {
-        VGA_text_clean();
-        count = 0;
-        unsigned SW_value = (unsigned int) *SW_ptr;// read SW
-        plot_image(0,0, start_page_320x240, 320, 240);
-        if(SW_value ==1){
-            goto new_game;
-        }else{
+        VGA_text_clean(); //clear the text
+        count = 0; //clear the score
+        unsigned SW_value = (unsigned int) *SW_ptr;// read SW value
+        plot_image(0,0, start_page_320x240, 320, 240); //plot the start page
+
+        if(SW_value ==1){ //if SW0 is turned on
+            goto new_game; //branch to new game
+        } else{ //else stay in this routine
             wait_for_vsync(); // swap front and back buffers on VGA vertical sync
             pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer
             goto start;
         }
     }
 
+    /* New game subroutine
+     * Here's the main game*/
     new_game:
     {
-        bool moveOn = true;
-        gameOver = false;
+        gameOver = false; //game over boolean
+
         //load game page without instruction title here
         plot_image(0,0, game_page_320x240, 320, 240);
         wait_for_vsync(); // swap front and back buffers on VGA vertical sync
         pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer
 
-        while (moveOn) {
-            int i = rand() % 13;
-            //char *textOutput = ;
+        while (true) { //infinite loop
+            int i = rand() % 19; //random instruction
+
             //vga text goes here:
             VGA_text_clean();
-            VGA_text(32,10,instruction[i].instruction);
+            VGA_text(32, 10, instruction[i].instruction);
 
             //giving time to wait for the user response
             wait_for_response();
-
-            //if edge capture
-            int key_pressed = -1;
-            if (*KEY_EDGE_ptr == 0b0001) {
-                key_pressed = 0;
-            } else if (*KEY_EDGE_ptr == 0b0010) {
-                key_pressed = 1;
-            } else if (*KEY_EDGE_ptr == 0b0100) {
-                key_pressed = 2;
-            } else {
-                key_pressed = 3;
-            }
-            //clear capture
-            *KEY_EDGE_ptr = 0xF;
-
-            //compare result with the key_pressed
-            if (key_pressed == instruction[i].answer) {
-                //show correct response
-                count++;
-
-            } else {
-                //show wrong response
-                gameOver = true;
-                goto game_over;
-            }
-            //clear edge_capture
-            int KEY_release = *KEY_EDGE_ptr;
-            *KEY_EDGE_ptr = 0xF;
-
-            unsigned SW_value = (unsigned int) *SW_ptr;// read SW
-            if (SW_value == 0){
+            //when return -> key is pressed, or SW0 is turned off
+            unsigned SW_value = (unsigned int) *SW_ptr;// read SW0 value
+            if(SW_value != 1) { //if SW0 is turned off, restart the game; branch to start rountine
                 goto start;
+            } else { //else if the key pressed
+
+                /*Determine which key is pressed*/
+                int key_pressed = -1;
+                if (*KEY_EDGE_ptr == 0b0001) { //KEY0
+                    key_pressed = 0;
+                } else if (*KEY_EDGE_ptr == 0b0010) { //KEY1
+                    key_pressed = 1;
+                } else if (*KEY_EDGE_ptr == 0b0100) { //KEY2
+                    key_pressed = 2;
+                } else if (*KEY_EDGE_ptr == 0b1000){ //KEY3
+                    key_pressed = 3;
+                }
+                //clear capture
+                *KEY_EDGE_ptr = 0xF;
+
+                //compare the correct answer with the key_pressed
+                if (key_pressed == instruction[i].answer) {
+                    //show correct response
+                    count++;
+                } else {
+                    //show wrong response
+                    gameOver = true; //game is over
+                    goto game_over;
+                }
             }
-
         }
     }
 
+    /* Game over subroutine*/
     game_over:
-   if(gameOver) {
-        //show game over image
-       VGA_text_clean();
-       gameOverloop:
-        plot_image(0,0, game_over_320x240, 320, 240);
+       if(gameOver) {
+           VGA_text_clean();
 
-       char score_hundred = count / 100;
-       char score_ten = (count - score_hundred * 100) / 10;
-       char score_one = count - score_hundred * 100 - score_ten * 10;
-       char myScoreString[40];
-       if (score_hundred != 0) {
-           myScoreString[0] = score_hundred + '0';
-       } else {
-           myScoreString[0] = ' ';
-       }
-       if (score_hundred == 0 && score_ten == 0) {
-           myScoreString[1] = ' ';
-       } else {
-           myScoreString[1] = score_ten + '0';
-       }
-       myScoreString[2] = score_one + '0';
-       myScoreString[3] = '\0';
+           gameOverloop:
+               //plot the game_over image
+               plot_image(0,0, game_over_320x240, 320, 240);
 
-        VGA_text(42,29,myScoreString);
+               /*count the score*/
+               char score_hundred = count / 100; //divide hundredth
+               char score_ten = (count - score_hundred * 100) / 10; //divide tenth
+               char score_one = count - score_hundred * 100 - score_ten * 10;  //divide ones
+               char myScoreString[40]; //declare score string
+               if (score_hundred != 0) {
+                   myScoreString[0] = score_hundred + '0';
+               } else {
+                   myScoreString[0] = ' ';
+               }
+               if (score_hundred == 0 && score_ten == 0) {
+                   myScoreString[1] = ' ';
+               } else {
+                   myScoreString[1] = score_ten + '0';
+               }
+               myScoreString[2] = score_one + '0';
+               myScoreString[3] = '\0';
 
-        int SW_value = *SW_ptr;
+               //display the score
+               VGA_text(42,29,myScoreString);
 
-        //display count on VGA
-        if(SW_value == 0){
-            goto start;
-        } else{
-            wait_for_vsync(); // swap front and back buffers on VGA vertical sync
-            pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer
-            goto gameOverloop;
+               int SW_value = *SW_ptr;
+               //display count on VGA
+               if(SW_value == 0){
+                   goto start;
+               } else{
+                   wait_for_vsync(); // swap front and back buffers on VGA vertical sync
+                   pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer
+                   goto gameOverloop;
+               }
+
+
         }
-
-
-    }
 }
 
 // subroutine for plotting text on the screen
@@ -218,16 +221,19 @@ void VGA_text(int x, int y, char *text_ptr) {
     }
 }
 
-
-
-
-// function for swapping two intergers
-void swap(int *left, int *right) {
-    int temp = *left;
-    *left = *right;
-    *right = temp;
+void wait_for_response(){
+    while(1){ //infinite loop
+        unsigned SW_value = (unsigned int) *SW_ptr;// read SW
+        if(*KEY_EDGE_ptr!=0){
+            return;
+        } else {
+            //do nothing
+        }
+        if(SW_value != 1) {
+            return;
+        }
+    }
 }
-
 
 
 // subroutine for plotting an image given a specific location and image array
@@ -277,8 +283,5 @@ bool wait_for_vsync() {
 
     return true;
 }
-
-
-
 
 
